@@ -147,6 +147,64 @@ func cota_standings(low int64, high int64) int64 {
 	return ret
 }
 
+func add(argv []string, argc int) string {
+	var mes = ""
+	if argc != 3 {
+		mes = "Invalid command"
+	} else {
+		var sum, err = strconv.ParseInt(argv[2], 10, 64)
+		if err != nil {
+			mes = "Invalid command"
+		} else {
+			mes = strconv.Itoa(int(sum)) + " were added to" + argv[1] + "'s balance"
+			balance[argv[1]] += sum
+		}
+	}
+	return mes
+}
+
+func help() string {
+	var mes = ""
+	mes = "```show user: shows user's balance" + "\n" + "show: shows your balance" +
+		"\n" + "add user sum: adds sum to user's balance" + "\n" +
+		"cota: calculates the quota between two users on codeforces" + "\n" +
+		"bet cf: bet on someone that they are gonna beat another user on codeforces in standings" + "\n" + "```"
+	return mes
+}
+
+func cota_cf(argv []string, argc int) string {
+	var retval = ""
+	var user1 = argv[2]
+	var user2 = argv[3]
+
+	ctx := context.Background()
+	logger := log.New(os.Stderr, "*** ", log.LstdFlags)
+	api, _ := goforces.NewClient(logger)
+
+	var ratingChange1, err1 = api.GetUserRating(ctx, user1)
+	var ratingChange2, err2 = api.GetUserRating(ctx, user2)
+	if err1 == nil && err2 == nil {
+		var rating1 = ratingChange1[len(ratingChange1)-1].NewRating
+		var rating2 = ratingChange2[len(ratingChange2)-1].NewRating
+		var cota1, cota2 = cota(rating1, rating2)
+
+		retval = strconv.Itoa(cota1/100) + "." + strconv.Itoa(cota1/10%10) + strconv.Itoa(cota1%10) + "-" + strconv.Itoa(cota2/100) + "." + strconv.Itoa(cota2/10%10) + strconv.Itoa(cota2%10)
+	} else {
+		retval = "Invalid user(s)"
+	}
+	return retval
+}
+
+func show(user string) string {
+	var mes = ""
+	if user == "" {
+		mes = "Invalid Command"
+	} else {
+		mes = user + "'s balance is " + strconv.Itoa(int(balance[user]))
+	}
+	return mes
+}
+
 func bet_cf(argv []string, user string) string {
 	var retval = ""
 	var user1 = argv[2]
@@ -194,6 +252,16 @@ func bet_cf(argv []string, user string) string {
 		}
 	}
 	return retval
+}
+
+func event_start() string {
+	event = true
+	return "Event started"
+}
+
+func event_stop() string {
+	event = false
+	return "Event ended"
 }
 
 func event_betting_start() string {
@@ -320,192 +388,65 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	var argv = strings.Split(m.Content, " ")
 	var argc = len(argv)
-	fmt.Println(argc)
 
 	if argc == 1 && argv[0] == BotPrefix+"ping" {
 		_, _ = s.ChannelMessageSend(m.ChannelID, "pong")
 	} else if argc == 3 && argv[0] == BotPrefix+"add" {
-		var user = argv[1]
-		var sum, err = strconv.ParseInt(argv[2], 10, 64)
+		var msg = add(argv, argc)
 
-		if user == "" || err != nil {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
-		} else {
-			balance[user] += sum
-			_, _ = s.ChannelMessageSend(m.ChannelID, strconv.Itoa(int(sum))+" were added to "+user+"'s balance")
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if m.Content == BotPrefix+"show" {
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Your balance is "+strconv.Itoa(int(balance[m.Author.Username])))
+		var msg = show(m.Author.Username)
+
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if argc == 2 && argv[0] == BotPrefix+"show" {
-		var user = argv[1]
+		var msg = show(argv[1])
 
-		_, _ = s.ChannelMessageSend(m.ChannelID, user+"'s balance is "+strconv.Itoa(int(balance[user])))
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if m.Content == BotPrefix+"help" {
-		_, _ = s.ChannelMessageSend(m.ChannelID, "```show user: shows user's balance"+"\n"+"show: shows your balance"+
-			"\n"+"add user sum: adds sum to user's balance```")
-	} else if argc == 3 && argv[0] == BotPrefix+"cota" {
-		var user1 = argv[1]
-		var user2 = argv[2]
+		var msg = help()
 
-		ctx := context.Background()
-		logger := log.New(os.Stderr, "*** ", log.LstdFlags)
-		api, _ := goforces.NewClient(logger)
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
+	} else if argc == 4 && argv[0]+" "+argv[1] == BotPrefix+"cota cf" {
+		var msg = cota_cf(argv, argc)
 
-		var ratingChange1, err1 = api.GetUserRating(ctx, user1)
-		var ratingChange2, err2 = api.GetUserRating(ctx, user2)
-		if err1 == nil && err2 == nil {
-			var rating1 = ratingChange1[len(ratingChange1)-1].NewRating
-			var rating2 = ratingChange2[len(ratingChange2)-1].NewRating
-			var cota1, cota2 = cota(rating1, rating2)
-
-			_, _ = s.ChannelMessageSend(m.ChannelID, strconv.Itoa(cota1/100)+"."+strconv.Itoa(cota1/10%10)+strconv.Itoa(cota1%10)+"-"+strconv.Itoa(cota2/100)+"."+strconv.Itoa(cota2/10%10)+strconv.Itoa(cota2%10))
-		} else {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid user(s)")
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if argc == 6 && argv[0]+" "+argv[1] == BotPrefix+"bet cf" {
-		var user1 = argv[2]
-		var user2 = argv[3]
-		var sum, err1 = strconv.ParseInt(argv[3], 10, 64)
-		var id, err2 = strconv.ParseInt(argv[4], 10, 64)
+		var msg = bet_cf(argv, m.Author.Username)
 
-		if err1 != nil || err2 != nil {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
-		} else {
-			ctx := context.Background()
-			logger := log.New(os.Stderr, "*** ", log.LstdFlags)
-			api, _ := goforces.NewClient(logger)
-			contestList, _ := api.GetContestList(ctx, nil)
-			var i = 0
-			for contestList[i].ID != id && !contestList[i].Finished() {
-				i++
-			}
-
-			if !(contestList[i].ID == id && !contestList[i].Finished()) {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "The contest is invalid!")
-			} else if balance[m.Author.ID] >= sum {
-
-				balance[m.Author.ID] -= sum
-
-				var ratingChange1, err1 = api.GetUserRating(ctx, user1)
-				var ratingChange2, err2 = api.GetUserRating(ctx, user2)
-				if err1 == nil && err2 == nil {
-					var rating1 = ratingChange1[len(ratingChange1)-1].NewRating
-					var rating2 = ratingChange2[len(ratingChange2)-1].NewRating
-					var cota1, _ = cota(rating1, rating2)
-
-					var win int64 = (sum - COMISION*sum/100) * int64(cota1) / 100
-
-					bet := Bet{m.Author.Username, user1, user2, win, sum}
-					bets[id].PushBack(bet)
-
-					_, _ = s.ChannelMessageSend(m.ChannelID, "You bet "+strconv.Itoa(int(sum))+" on "+user1+" vs "+user2+" in the Codforces contest: "+strconv.Itoa(int(id))+" with a potentially win of "+strconv.Itoa(int(win)))
-				} else {
-					_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid user(s)")
-				}
-			} else {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "Insufficient funds, you have only "+strconv.Itoa(int(balance[m.Author.ID])))
-			}
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if m.Content == BotPrefix+"event start" {
-		event = true
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Event started")
+		var msg = event_start()
+
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if m.Content == BotPrefix+"event stop" {
-		event = false
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Event ended")
+		var msg = event_stop()
+
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if m.Content == BotPrefix+"event betting start" {
-		event_betting = true
-		event_rewarded = false
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Event betting started")
+		var msg = event_betting_start()
+
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if m.Content == BotPrefix+"event betting stop" {
-		event_betting = false
-		_, _ = s.ChannelMessageSend(m.ChannelID, "Event betting ended")
+		var msg = event_betting_stop()
+
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if argc == 5 && argv[0]+" "+argv[1]+" "+argv[3] == BotPrefix+"event cota points" {
-		var low, err1 = strconv.ParseInt(argv[4], 10, 64)
-		var high, err2 = strconv.ParseInt(argv[5], 10, 64)
+		var msg = event_cota_points(argv)
 
-		if err1 == nil && err2 == nil {
-			if low < high {
-				var aux = low
-				low = high
-				high = aux
-			}
-
-			var cota = cota_points(low, high)
-			_, _ = s.ChannelMessageSend(m.ChannelID, strconv.Itoa(int(cota/100))+"."+strconv.Itoa(int(cota/10%10))+strconv.Itoa(int(cota%10)))
-		} else {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if argc == 5 && argv[0]+" "+argv[1]+" "+argv[3] == BotPrefix+"event cota standings" {
-		var low, err1 = strconv.ParseInt(argv[4], 10, 64)
-		var high, err2 = strconv.ParseInt(argv[5], 10, 64)
+		var msg = event_cota_standings(argv)
 
-		if err1 != nil || err2 != nil {
-			if low < high {
-				var aux = low
-				low = high
-				high = aux
-			}
-
-			var cota = cota_standings(low, high)
-			_, _ = s.ChannelMessageSend(m.ChannelID, strconv.Itoa(int(cota/100))+"."+strconv.Itoa(int(cota/10%10))+strconv.Itoa(int(cota%10)))
-		} else {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if argc == 7 && argv[0]+" "+argv[1]+" "+argv[2] == BotPrefix+"event bet points" {
-		var low, err1 = strconv.ParseInt(argv[3], 10, 64)
-		var high, err2 = strconv.ParseInt(argv[4], 10, 64)
-		var sum, err3 = strconv.ParseInt(argv[5], 10, 64)
-		var player = argv[6]
+		var msg = event_bet_points(argv, m.Author.Username)
 
-		if err1 == nil && err2 == nil && err3 == nil {
-
-			if low < high {
-				var aux = low
-				low = high
-				high = aux
-			}
-
-			if balance[m.Author.Username] >= sum {
-				balance[m.Author.Username] -= sum
-
-				var cota = cota_points(low, high)
-				var win = (sum - COMISION_EVENTS*sum/100) * cota / 100
-				event_bets_points[player].PushBack(EventBet{m.Author.Username, player, win, low, high})
-
-				_, _ = s.ChannelMessageSend(m.ChannelID, "You bet "+strconv.Itoa(int(sum))+" on "+player+" scoring between "+strconv.Itoa(int(low))+" and"+strconv.Itoa(int(high)))
-			} else {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "Insufficient funds, you have only "+strconv.Itoa(int(balance[m.Author.ID])))
-			}
-		} else {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if argc == 7 && argv[0]+" "+argv[1]+" "+argv[2] == BotPrefix+"event bet standings" {
-		var low, err1 = strconv.ParseInt(argv[3], 10, 64)
-		var high, err2 = strconv.ParseInt(argv[4], 10, 64)
-		var sum, err3 = strconv.ParseInt(argv[5], 10, 64)
-		var player = argv[6]
+		var msg = event_bet_standings(argv, m.Author.Username)
 
-		if err1 == nil && err2 == nil && err3 == nil {
-			if low < high {
-				var aux = low
-				low = high
-				high = aux
-			}
-
-			if balance[m.Author.Username] >= sum {
-				balance[m.Author.Username] -= sum
-
-				var cota = cota_points(low, high)
-				var win = (sum - sum*COMISION_EVENTS/100) * cota / 100
-				event_bets_standings[player].PushBack(EventBet{m.Author.Username, player, win, low, high})
-
-				_, _ = s.ChannelMessageSend(m.ChannelID, "You bet "+strconv.Itoa(int(sum))+" on "+player+" standing between "+strconv.Itoa(int(low))+" and"+strconv.Itoa(int(high)))
-			} else {
-				_, _ = s.ChannelMessageSend(m.ChannelID, "Insufficient funds, you have only "+strconv.Itoa(int(balance[m.Author.ID])))
-			}
-		} else {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
-		}
+		_, _ = s.ChannelMessageSend(m.ChannelID, msg)
 	} else if string(m.Content[0]) == BotPrefix {
 		_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid command")
 	}
