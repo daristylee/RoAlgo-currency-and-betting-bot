@@ -156,7 +156,7 @@ func add(argv []string, argc int) string {
 		if err != nil {
 			mes = "Invalid command"
 		} else {
-			mes = strconv.Itoa(int(sum)) + " were added to" + argv[1] + "'s balance"
+			mes = strconv.Itoa(int(sum)) + " were added to " + argv[1] + "'s balance"
 			balance[argv[1]] += sum
 		}
 	}
@@ -165,10 +165,10 @@ func add(argv []string, argc int) string {
 
 func help() string {
 	var mes = ""
-	mes = "```show user: shows user's balance" + "\n" + "show: shows your balance" +
-		"\n" + "add user sum: adds sum to user's balance" + "\n" +
-		"cota: calculates the quota between two users on codeforces" + "\n" +
-		"bet cf: bet on someone that they are gonna beat another user on codeforces in standings" + "\n" + "```"
+	mes = "```" + "show user: shows user's balance. Example: ?show vilc._.ucse" + "\n" + "show: shows your balance. Exemple: ?show" +
+		"\n" + "add user sum: adds sum to user's balance. Example: ?add vilc._.ucse 100" + "\n" +
+		"cota cf: calculates the quota between two users on codeforces. Example: ?cota cf tourist Benq" + "\n" +
+		"bet cf: bet on someone that they are gonna beat another user on codeforces in standings. Example: ?bet cf tourist Benq 988 1834" + "\n" + "```"
 	return mes
 }
 
@@ -209,10 +209,16 @@ func bet_cf(argv []string, user string) string {
 	var retval = ""
 	var user1 = argv[2]
 	var user2 = argv[3]
-	var sum, err1 = strconv.ParseInt(argv[3], 10, 64)
-	var id, err2 = strconv.ParseInt(argv[4], 10, 64)
+	var sum, err1 = strconv.ParseInt(argv[4], 10, 64)
+	var id, err2 = strconv.ParseInt(argv[5], 10, 64)
 
 	if err1 != nil || err2 != nil {
+		if err1 != nil {
+			fmt.Println(err1)
+		}
+		if err2 != nil {
+			fmt.Println(err2)
+		}
 		retval = "Invalid command"
 	} else {
 		ctx := context.Background()
@@ -220,12 +226,13 @@ func bet_cf(argv []string, user string) string {
 		api, _ := goforces.NewClient(logger)
 		contestList, _ := api.GetContestList(ctx, nil)
 		var i = 0
-		var length = len(contestList)
-		for i < length && contestList[i].ID != id && !contestList[i].Finished() {
+		for contestList[i].ID != id && !contestList[i].Finished() {
 			i++
+			fmt.Println(contestList[i].ID)
+			fmt.Println(contestList[i].Phase)
 		}
 
-		if !(contestList[i].ID == id && !contestList[i].Finished()) {
+		if contestList[i].ID != id || contestList[i].Finished() {
 			retval = "The contest is invalid!"
 		} else if balance[user] >= sum {
 
@@ -241,9 +248,10 @@ func bet_cf(argv []string, user string) string {
 				var win int64 = (sum - COMISION*sum/100) * int64(cota1) / 100
 
 				bet := Bet{user, user1, user2, win, sum}
+				bets[id] = list.New()
 				bets[id].PushBack(bet)
 
-				retval = "You bet " + strconv.Itoa(int(sum)) + " on " + user1 + " vs " + user2 + " in the Codforces contest: " + strconv.Itoa(int(id)) + " with a potentially win of " + strconv.Itoa(int(win))
+				retval = "You bet " + strconv.Itoa(int(sum)) + " on " + user1 + " vs " + user2 + " in the Codforces contest: " + strconv.Itoa(int(id)) + " with a potential win of " + strconv.Itoa(int(win))
 			} else {
 				retval = "Invalid user(s)"
 			}
